@@ -5,10 +5,14 @@ let navigationHistory = [];
 let historyIndex = -1;
 let selectedFile = null;
 let settings = {};
+let siteFilesCurrentPath = '';
+let currentSiteId = null;
+
+// ============ INIT ============
 
 function getAdminPathFromURL() {
-  const pathParts = window.location.pathname.split('/').filter(p => p);
-  return pathParts.length > 0 ? pathParts[0] : null;
+  const parts = window.location.pathname.split('/').filter(p => p);
+  return parts.length > 0 ? parts[0] : null;
 }
 
 adminPath = getAdminPathFromURL();
@@ -17,33 +21,58 @@ const loginScreen = document.getElementById('login-screen');
 const adminScreen = document.getElementById('admin-screen');
 const loginForm = document.getElementById('login-form');
 const loginError = document.getElementById('login-error');
-const uploadModal = document.getElementById('upload-modal');
+
+// ============ TOAST ============
+
+function showToast(message, type = 'info') {
+  const toast = document.getElementById('toast');
+  const msg = document.getElementById('toast-message');
+  if (!toast || !msg) return;
+  msg.textContent = message;
+  toast.className = `toast ${type}`;
+  setTimeout(() => { toast.className = 'toast hidden'; }, 3000);
+}
+
+// ============ API HELPER ============
+
+async function api(endpoint, options = {}) {
+  const url = `/${adminPath}/api${endpoint}`;
+  const headers = { 'Authorization': `Bearer ${token}`, ...options.headers };
+  if (options.body && !(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+    options.body = JSON.stringify(options.body);
+  }
+  const response = await fetch(url, { ...options, headers });
+  return response;
+}
+
+async function apiJSON(endpoint, options = {}) {
+  const response = await api(endpoint, options);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+// ============ LOGIN ============
 
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-  
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
-  
+
   try {
     const pathParts = window.location.pathname.split('/').filter(p => p);
-    const loginPath = pathParts.length > 0 ? pathParts[0] : '';
-    
-    if (!loginPath) {
-      loginError.textContent = 'Invalid admin URL';
-      loginError.classList.add('show');
-      return;
-    }
-    
-    const response = await fetch(`/${loginPath}/api/login`, {
+    const loginPath = pathParts[0] || '';
+    if (!loginPath) { loginError.textContent = 'Invalid admin URL'; loginError.classList.add('show'); return; }
+
+    const res = await fetch(`/${loginPath}/api/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
-    
-    const data = await response.json();
-    
-    if (response.ok) {
+
+    const data = await res.json();
+    if (res.ok) {
       token = data.token;
       adminPath = data.adminPath;
       localStorage.setItem('token', token);
@@ -53,397 +82,256 @@ loginForm.addEventListener('submit', async (e) => {
       loginError.textContent = data.error;
       loginError.classList.add('show');
     }
-  } catch (error) {
-    loginError.textContent = 'Connection error';
-    loginError.classList.add('show');
-  }
+  } catch (err) { loginError.textContent = 'Connection error'; loginError.classList.add('show'); }
 });
+
+// ============ ADMIN SCREEN ============
 
 function showAdminScreen() {
   loginScreen.classList.remove('active');
   adminScreen.classList.add('active');
-  
+
   if (window.location.protocol === 'http:' && window.location.hostname !== 'localhost') {
-    const httpsWarningDismissed = localStorage.getItem('httpsWarningDismissed');
-    if (!httpsWarningDismissed) {
-      const httpsWarning = document.getElementById('https-warning');
-      httpsWarning.classList.add('show');
+    if (!localStorage.getItem('httpsWarningDismissed')) {
+      document.getElementById('https-warning').classList.add('show');
       adminScreen.classList.add('has-warning');
     }
   }
-  
+
   loadSettings();
   loadSystemInfo();
   startAutoRefresh();
 }
 
 document.getElementById('close-https-warning').addEventListener('click', () => {
-  const httpsWarning = document.getElementById('https-warning');
-  httpsWarning.classList.remove('show');
+  document.getElementById('https-warning').classList.remove('show');
   adminScreen.classList.remove('has-warning');
   localStorage.setItem('httpsWarningDismissed', 'true');
 });
 
 document.getElementById('logout-btn').addEventListener('click', () => {
-  token = null;
-  adminPath = null;
+  token = null; adminPath = null;
   localStorage.removeItem('token');
   localStorage.removeItem('adminPath');
   adminScreen.classList.remove('active');
   loginScreen.classList.add('active');
 });
 
+// ============ NAVIGATION ============
+
 document.querySelectorAll('.nav-item').forEach(item => {
   item.addEventListener('click', () => {
     document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
     item.classList.add('active');
-    
+
     const tab = item.dataset.tab;
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.getElementById(`${tab}-tab`).classList.add('active');
-    
-    if (tab === 'files') {
-      loadFiles();
-    } else if (tab === 'settings') {
-      loadSettings();
+
+    switch (tab) {
+      case 'files': loadFiles(); break;
+      case 'settings': loadSettings(); break;
+      case 'api': loadVariables(); break;
+      case 'sites': loadSites(); break;
+      case 'security': loadSecurity(); break;
+      case 'ports': loadPorts(); loadActivePorts(); break;
     }
   });
 });
 
+// ============ SYSTEM INFO ============
+
 async function loadSystemInfo() {
   try {
-    const response = await fetch(`/${adminPath}/api/system`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    const data = await response.json();
-    
+    const data = await apiJSON('/system');
     document.getElementById('cpu-usage').textContent = `${data.cpu.usage}%`;
     document.getElementById('cpu-model').textContent = `${data.cpu.cores} cores @ ${data.cpu.speed} GHz`;
-    
     document.getElementById('memory-usage').textContent = `${data.memory.percentage}%`;
-    document.getElementById('memory-total').textContent = `${data.memory.used} GB / ${data.memory.total} GB`;
-    
+    document.getElementById('memory-total').textContent = `${data.memory.used} / ${data.memory.total} GB`;
     if (data.disk.length > 0) {
       document.getElementById('disk-usage').textContent = `${data.disk[0].percentage}%`;
-      document.getElementById('disk-total').textContent = `${data.disk[0].used} GB / ${data.disk[0].size} GB`;
+      document.getElementById('disk-total').textContent = `${data.disk[0].used} / ${data.disk[0].size} GB`;
     }
-    
-    document.getElementById('uptime').textContent = `${data.os.uptime} hours`;
+    document.getElementById('uptime').textContent = `${data.os.uptime}h`;
     document.getElementById('os-info').textContent = `${data.os.distro} ${data.os.release}`;
-    
     document.getElementById('hostname').textContent = data.os.hostname;
     document.getElementById('platform').textContent = data.os.platform;
     document.getElementById('processes').textContent = `${data.processes.running} running / ${data.processes.all} total`;
-  } catch (error) {
-    console.error('Failed to load system info:', error);
-  }
+  } catch (e) { console.error('System info error:', e); }
 }
 
+let refreshInterval;
 function startAutoRefresh() {
-  setInterval(() => {
-    if (settings.autoRefresh !== false) {
-      loadSystemInfo();
-    }
+  if (refreshInterval) clearInterval(refreshInterval);
+  refreshInterval = setInterval(() => {
+    if (settings.autoRefresh !== false) loadSystemInfo();
   }, (settings.refreshInterval || 5) * 1000);
 }
 
-async function loadFiles(path = '') {
+// ============ FILE MANAGER ============
+
+async function loadFiles(filePath) {
   const filesList = document.getElementById('files-list');
   filesList.innerHTML = '<div class="loading">Loading files...</div>';
-  
+
   try {
-    const url = path ? `/${adminPath}/api/files?path=${encodeURIComponent(path)}` : `/${adminPath}/api/files`;
-    const response = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      filesList.innerHTML = '<div class="loading">Access denied or failed to load files</div>';
-      return;
-    }
-    
+    const url = filePath ? `/files?path=${encodeURIComponent(filePath)}` : '/files';
+    const data = await apiJSON(url);
+
     currentPath = data.currentPath;
-    
+
     if (historyIndex === -1 || navigationHistory[historyIndex] !== currentPath) {
       navigationHistory = navigationHistory.slice(0, historyIndex + 1);
       navigationHistory.push(currentPath);
       historyIndex = navigationHistory.length - 1;
     }
-    
+
     updateBreadcrumb(currentPath);
-    
+
     if (data.files.length === 0) {
-      filesList.innerHTML = '<div class="loading">No files found</div>';
+      filesList.innerHTML = '<div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><p>Empty folder</p></div>';
       return;
     }
-    
+
     const folders = data.files.filter(f => f.isDirectory).sort((a, b) => a.name.localeCompare(b.name));
     const files = data.files.filter(f => !f.isDirectory).sort((a, b) => a.name.localeCompare(b.name));
-    const sortedFiles = [...folders, ...files];
-    
-    filesList.innerHTML = sortedFiles.map(file => `
-      <div class="file-item" ondblclick="handleFileDoubleClick('${file.path.replace(/\\/g, '\\\\')}', ${file.isDirectory})">
-        <div class="file-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            ${file.isDirectory ? 
-              '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>' :
-              '<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/>'
+
+    filesList.innerHTML = [...folders, ...files].map(file => {
+      const escapedPath = file.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      return `
+        <div class="file-item" ondblclick="${file.isDirectory ? `loadFiles('${escapedPath}')` : ''}">
+          <div class="file-icon">
+            ${file.isDirectory ?
+              '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' :
+              '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>'
             }
-          </svg>
-        </div>
-        <div class="file-info">
-          <div class="file-name">${file.name}</div>
-          <div class="file-meta">
-            ${file.isDirectory ? 'Folder' : formatBytes(file.size)} • 
-            ${formatDate(file.modified)}
           </div>
-        </div>
-        <div class="file-actions">
-          ${!file.isDirectory ? `
-            <button class="btn-icon" onclick="deleteFile('${file.path.replace(/\\/g, '\\\\')}', event)" title="Delete">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="3 6 5 6 21 6"/>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-              </svg>
+          <div class="file-info" style="flex:1;min-width:0;">
+            <div class="file-name">${file.name}</div>
+            <div class="file-meta">${file.isDirectory ? 'Folder' : formatBytes(file.size)} • ${formatDate(file.modified)}</div>
+          </div>
+          <div class="file-actions" style="display:flex;gap:0.25rem;">
+            <button class="btn-icon" onclick="deleteFile('${escapedPath}', event)" title="Delete">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
-          ` : ''}
-        </div>
-      </div>
-    `).join('');
-  } catch (error) {
-    filesList.innerHTML = '<div class="loading">Failed to load files</div>';
+          </div>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    filesList.innerHTML = `<div class="loading">Failed to load files: ${e.message}</div>`;
   }
 }
 
-function updateBreadcrumb(path) {
-  const breadcrumb = document.getElementById('path-breadcrumb');
-  breadcrumb.textContent = path;
-}
-
-function handleFileDoubleClick(path, isDirectory) {
-  if (isDirectory) {
-    loadFiles(path);
-  }
+function updateBreadcrumb(p) {
+  document.getElementById('path-breadcrumb').textContent = p;
 }
 
 document.getElementById('refresh-files').addEventListener('click', () => loadFiles(currentPath));
-
 document.getElementById('back-btn').addEventListener('click', () => {
-  if (historyIndex > 0) {
-    historyIndex--;
-    loadFiles(navigationHistory[historyIndex]);
-  }
+  if (historyIndex > 0) { historyIndex--; loadFiles(navigationHistory[historyIndex]); }
 });
-
 document.getElementById('forward-btn').addEventListener('click', () => {
-  if (historyIndex < navigationHistory.length - 1) {
-    historyIndex++;
-    loadFiles(navigationHistory[historyIndex]);
-  }
+  if (historyIndex < navigationHistory.length - 1) { historyIndex++; loadFiles(navigationHistory[historyIndex]); }
 });
-
 document.getElementById('up-btn').addEventListener('click', () => {
   const parts = currentPath.split('/');
-  if (parts.length > 2) {
-    parts.pop();
-    loadFiles(parts.join('/'));
-  }
+  if (parts.length > 2) { parts.pop(); loadFiles(parts.join('/')); }
 });
-
-document.getElementById('home-btn').addEventListener('click', () => {
-  loadFiles();
-});
+document.getElementById('home-btn').addEventListener('click', () => loadFiles());
 
 document.getElementById('new-folder-btn').addEventListener('click', async () => {
-  const name = prompt('Enter folder name:');
+  const name = prompt('Folder name:');
   if (!name) return;
-  
   try {
-    const response = await fetch(`/${adminPath}/api/files/create-folder`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ name })
-    });
-    
-    if (response.ok) {
-      loadFiles(currentPath);
-    }
-  } catch (error) {
-    alert('Failed to create folder');
-  }
+    await apiJSON('/files/create-folder', { method: 'POST', body: { name, currentPath } });
+    loadFiles(currentPath);
+    showToast('Folder created', 'success');
+  } catch (e) { showToast('Failed to create folder', 'error'); }
 });
 
 async function deleteFile(filePath, event) {
   if (event) event.stopPropagation();
-  if (!confirm('Are you sure you want to delete this file?')) return;
-  
+  if (!confirm('Delete this item?')) return;
   try {
-    const response = await fetch(`/${adminPath}/api/files`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ path: filePath })
-    });
-    
-    if (response.ok) {
-      loadFiles(currentPath);
-    }
-  } catch (error) {
-    alert('Failed to delete file');
-  }
+    await apiJSON('/files', { method: 'DELETE', body: { path: filePath } });
+    loadFiles(currentPath);
+    showToast('Deleted', 'success');
+  } catch (e) { showToast('Failed to delete', 'error'); }
 }
 
+// ============ UPLOAD ============
+
+const uploadModal = document.getElementById('upload-modal');
 document.getElementById('upload-file-btn').addEventListener('click', () => {
   uploadModal.classList.add('active');
   document.getElementById('upload-result-modal').classList.add('hidden');
   document.getElementById('upload-progress').classList.add('hidden');
-  document.getElementById('dropzone-modal').classList.remove('has-file');
   document.getElementById('start-upload-btn').disabled = true;
   selectedFile = null;
+  const dz = document.getElementById('dropzone-modal');
+  dz.innerHTML = '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><p>Drag & drop or click to select file</p>';
 });
 
-document.getElementById('close-upload-modal').addEventListener('click', () => {
-  uploadModal.classList.remove('active');
-});
+document.getElementById('close-upload-modal').addEventListener('click', () => uploadModal.classList.remove('active'));
 
-uploadModal.addEventListener('click', (e) => {
-  if (e.target === uploadModal) {
-    return;
-  }
-});
-
-const dropzoneModal = document.getElementById('dropzone-modal');
-const fileInputModal = document.getElementById('file-input-modal');
-
-dropzoneModal.addEventListener('click', () => fileInputModal.click());
-
-dropzoneModal.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  dropzoneModal.classList.add('dragover');
-});
-
-dropzoneModal.addEventListener('dragleave', () => {
-  dropzoneModal.classList.remove('dragover');
-});
-
-dropzoneModal.addEventListener('drop', (e) => {
-  e.preventDefault();
-  dropzoneModal.classList.remove('dragover');
-  
-  if (e.dataTransfer.files.length > 0) {
-    selectFile(e.dataTransfer.files[0]);
-  }
-});
-
-fileInputModal.addEventListener('change', (e) => {
-  if (e.target.files.length > 0) {
-    selectFile(e.target.files[0]);
-  }
-});
+const dropzone = document.getElementById('dropzone-modal');
+const fileInput = document.getElementById('file-input-modal');
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); if (e.dataTransfer.files[0]) selectFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', (e) => { if (e.target.files[0]) selectFile(e.target.files[0]); });
 
 function selectFile(file) {
   selectedFile = file;
-  dropzoneModal.classList.add('has-file');
-  dropzoneModal.innerHTML = `
-    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
-      <polyline points="13 2 13 9 20 9"/>
-    </svg>
-    <p><strong>${file.name}</strong></p>
-    <p>${formatBytes(file.size)}</p>
-  `;
+  dropzone.innerHTML = `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg><p><strong>${file.name}</strong></p><p>${formatBytes(file.size)}</p>`;
   document.getElementById('start-upload-btn').disabled = false;
 }
 
 document.getElementById('start-upload-btn').addEventListener('click', async () => {
   if (!selectedFile) return;
-  
   const formData = new FormData();
   formData.append('file', selectedFile);
-  
-  const password = document.getElementById('upload-password-modal').value;
-  if (password) {
-    formData.append('password', password);
-  }
-  
-  try {
-    document.getElementById('upload-progress').classList.remove('hidden');
-    document.getElementById('progress-fill').style.width = '0%';
-    document.getElementById('progress-text').textContent = 'Uploading...';
-    
-    const xhr = new XMLHttpRequest();
-    
-    xhr.upload.addEventListener('progress', (e) => {
-      if (e.lengthComputable) {
-        const percent = (e.loaded / e.total) * 100;
-        document.getElementById('progress-fill').style.width = percent + '%';
-        document.getElementById('progress-text').textContent = `Uploading... ${Math.round(percent)}%`;
-      }
-    });
-    
-    xhr.addEventListener('load', () => {
-      if (xhr.status === 200) {
-        const data = JSON.parse(xhr.responseText);
-        let downloadUrl = data.downloadUrl;
-        if (password) {
-          downloadUrl += `?password=${encodeURIComponent(password)}`;
-        }
-        
-        document.getElementById('download-url-modal').value = downloadUrl;
-        document.getElementById('upload-result-modal').classList.remove('hidden');
-        document.getElementById('upload-progress').classList.add('hidden');
-        
-        document.getElementById('upload-password-modal').value = '';
-        loadFiles(currentPath);
-      } else {
-        alert('Upload failed');
-        document.getElementById('upload-progress').classList.add('hidden');
-      }
-    });
-    
-    xhr.open('POST', `/${adminPath}/api/upload`);
-    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    xhr.send(formData);
-  } catch (error) {
-    alert('Upload failed');
-    document.getElementById('upload-progress').classList.add('hidden');
-  }
+  const pw = document.getElementById('upload-password-modal').value;
+  if (pw) formData.append('password', pw);
+
+  document.getElementById('upload-progress').classList.remove('hidden');
+  const xhr = new XMLHttpRequest();
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) {
+      const pct = (e.loaded / e.total) * 100;
+      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('progress-text').textContent = `Uploading... ${Math.round(pct)}%`;
+    }
+  };
+  xhr.onload = () => {
+    if (xhr.status === 200) {
+      const data = JSON.parse(xhr.responseText);
+      document.getElementById('download-url-modal').value = data.downloadUrl;
+      document.getElementById('upload-result-modal').classList.remove('hidden');
+      document.getElementById('upload-progress').classList.add('hidden');
+      loadFiles(currentPath);
+      showToast('File uploaded!', 'success');
+    } else {
+      showToast('Upload failed', 'error');
+      document.getElementById('upload-progress').classList.add('hidden');
+    }
+  };
+  xhr.open('POST', `/${adminPath}/api/upload`);
+  xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+  xhr.send(formData);
 });
 
 document.getElementById('copy-url-modal').addEventListener('click', () => {
-  const urlInput = document.getElementById('download-url-modal');
-  urlInput.select();
-  document.execCommand('copy');
-  
-  const btn = document.getElementById('copy-url-modal');
-  const originalHTML = btn.innerHTML;
-  btn.innerHTML = `
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <polyline points="20 6 9 17 4 12"/>
-    </svg>
-  `;
-  
-  setTimeout(() => {
-    btn.innerHTML = originalHTML;
-  }, 2000);
+  navigator.clipboard.writeText(document.getElementById('download-url-modal').value);
+  showToast('URL copied!', 'success');
 });
+
+// ============ SETTINGS ============
 
 async function loadSettings() {
   try {
-    const response = await fetch(`/${adminPath}/api/settings`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    settings = await response.json();
-    
+    settings = await apiJSON('/settings');
     document.getElementById('setting-theme').value = settings.theme || 'light';
     document.getElementById('setting-compact').checked = settings.compactMode || false;
     document.getElementById('setting-autorefresh').checked = settings.autoRefresh !== false;
@@ -451,17 +339,12 @@ async function loadSettings() {
     document.getElementById('setting-hidden').checked = settings.showHiddenFiles || false;
     document.getElementById('setting-dateformat').value = settings.dateFormat || 'locale';
     document.getElementById('setting-maxupload').value = settings.maxUploadSize || 100;
-    document.getElementById('setting-defaultpass').checked = settings.defaultPasswordProtection || false;
     document.getElementById('setting-notifications').checked = settings.notifications !== false;
     document.getElementById('setting-sounds').checked = settings.soundEffects || false;
     document.getElementById('setting-timeout').value = settings.sessionTimeout || 60;
-    document.getElementById('setting-requirepass').checked = settings.requirePasswordOnDownload || false;
     document.getElementById('setting-language').value = settings.language || 'en';
-    
     applySettings(settings);
-  } catch (error) {
-    console.error('Failed to load settings');
-  }
+  } catch (e) { console.error('Settings error:', e); }
 }
 
 document.getElementById('save-settings').addEventListener('click', async () => {
@@ -473,82 +356,24 @@ document.getElementById('save-settings').addEventListener('click', async () => {
     showHiddenFiles: document.getElementById('setting-hidden').checked,
     dateFormat: document.getElementById('setting-dateformat').value,
     maxUploadSize: parseInt(document.getElementById('setting-maxupload').value),
-    defaultPasswordProtection: document.getElementById('setting-defaultpass').checked,
     notifications: document.getElementById('setting-notifications').checked,
     soundEffects: document.getElementById('setting-sounds').checked,
     sessionTimeout: parseInt(document.getElementById('setting-timeout').value),
-    requirePasswordOnDownload: document.getElementById('setting-requirepass').checked,
     language: document.getElementById('setting-language').value
   };
-  
   try {
-    const response = await fetch(`/${adminPath}/api/settings`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(settings)
-    });
-    
-    if (response.ok) {
-      applySettings(settings);
-      alert('Settings saved successfully!');
-    }
-  } catch (error) {
-    alert('Failed to save settings');
-  }
+    await apiJSON('/settings', { method: 'POST', body: settings });
+    applySettings(settings);
+    showToast('Settings saved!', 'success');
+  } catch (e) { showToast('Failed to save settings', 'error'); }
 });
 
-function applySettings(settings) {
-  if (settings.theme === 'dark') {
-    document.body.classList.add('dark-theme');
-  } else {
-    document.body.classList.remove('dark-theme');
-  }
-  
-  if (settings.compactMode) {
-    document.body.classList.add('compact-mode');
-  } else {
-    document.body.classList.remove('compact-mode');
-  }
-  
-  if (settings.autoRefresh) {
-    startAutoRefresh();
-  }
+function applySettings(s) {
+  document.body.classList.toggle('dark-theme', s.theme === 'dark');
+  document.body.classList.toggle('compact-mode', s.compactMode);
 }
 
-function formatBytes(bytes) {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-}
-
-function formatDate(date) {
-  const d = new Date(date);
-  return d.toLocaleString();
-}
-
-const savedToken = localStorage.getItem('token');
-const savedAdminPath = localStorage.getItem('adminPath');
-
-const pathParts = window.location.pathname.split('/').filter(p => p);
-const urlPath = pathParts.length > 0 ? pathParts[0] : '';
-
-if (!urlPath) {
-  loginError.textContent = 'Invalid URL. Please use the correct admin panel URL.';
-  loginError.classList.add('show');
-  document.getElementById('username').disabled = true;
-  document.getElementById('password').disabled = true;
-  document.querySelector('.btn-login').disabled = true;
-} else if (savedToken && savedAdminPath && urlPath === savedAdminPath) {
-  token = savedToken;
-  adminPath = savedAdminPath;
-  showAdminScreen();
-}
-
+// ============ API VARIABLES ============
 
 const variableModal = document.getElementById('variable-modal');
 const commitModal = document.getElementById('commit-modal');
@@ -556,32 +381,12 @@ const commitModal = document.getElementById('commit-modal');
 document.getElementById('create-variable-btn').addEventListener('click', () => {
   variableModal.classList.add('active');
   document.getElementById('variable-result').classList.add('hidden');
-  document.getElementById('var-name').value = '';
-  document.getElementById('var-value').value = '';
-  document.getElementById('var-version').value = '';
-  document.getElementById('var-password').value = '';
+  ['var-name', 'var-value', 'var-version', 'var-password'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('var-redirect-delay').value = '5';
 });
 
-document.getElementById('close-variable-modal').addEventListener('click', () => {
-  variableModal.classList.remove('active');
-});
-
-document.getElementById('close-commit-modal').addEventListener('click', () => {
-  commitModal.classList.remove('active');
-});
-
-variableModal.addEventListener('click', (e) => {
-  if (e.target === variableModal) {
-    return;
-  }
-});
-
-commitModal.addEventListener('click', (e) => {
-  if (e.target === commitModal) {
-    return;
-  }
-});
+document.getElementById('close-variable-modal').addEventListener('click', () => variableModal.classList.remove('active'));
+document.getElementById('close-commit-modal').addEventListener('click', () => commitModal.classList.remove('active'));
 
 document.getElementById('create-variable-submit').addEventListener('click', async () => {
   const name = document.getElementById('var-name').value;
@@ -589,162 +394,82 @@ document.getElementById('create-variable-submit').addEventListener('click', asyn
   const version = document.getElementById('var-version').value;
   const password = document.getElementById('var-password').value;
   const redirectDelay = parseInt(document.getElementById('var-redirect-delay').value);
-  
-  if (!name || !value || !version) {
-    alert('Please fill in all required fields');
-    return;
-  }
-  
+  if (!name || !value || !version) { showToast('Fill all required fields', 'error'); return; }
+
   try {
-    const response = await fetch(`/${adminPath}/api/variables`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ name, value, version, password, redirectDelay })
-    });
-    
-    const data = await response.json();
-    
-    if (response.ok) {
-      let url = data.url;
-      if (password) {
-        url += `?password=${encodeURIComponent(password)}`;
-      }
-      
-      document.getElementById('variable-url').value = url;
-      document.getElementById('variable-result').classList.remove('hidden');
-      
-      loadVariables();
-    } else {
-      alert('Failed to create variable');
-    }
-  } catch (error) {
-    alert('Failed to create variable');
-  }
+    const data = await apiJSON('/variables', { method: 'POST', body: { name, value, version, password, redirectDelay } });
+    const url = password ? `${data.url}?password=${encodeURIComponent(password)}` : data.url;
+    document.getElementById('variable-url').value = url;
+    document.getElementById('variable-result').classList.remove('hidden');
+    loadVariables();
+    showToast('Variable created!', 'success');
+  } catch (e) { showToast('Failed to create variable', 'error'); }
 });
 
 document.getElementById('copy-variable-url').addEventListener('click', () => {
-  const urlInput = document.getElementById('variable-url');
-  urlInput.select();
-  document.execCommand('copy');
-  
-  const btn = document.getElementById('copy-variable-url');
-  const originalHTML = btn.innerHTML;
-  btn.innerHTML = `
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <polyline points="20 6 9 17 4 12"/>
-    </svg>
-  `;
-  
-  setTimeout(() => {
-    btn.innerHTML = originalHTML;
-  }, 2000);
+  navigator.clipboard.writeText(document.getElementById('variable-url').value);
+  showToast('URL copied!', 'success');
 });
 
 async function loadVariables() {
-  const variablesList = document.getElementById('variables-list');
-  variablesList.innerHTML = '<div class="loading">Loading variables...</div>';
-  
+  const list = document.getElementById('variables-list');
+  list.innerHTML = '<div class="loading">Loading...</div>';
+
   try {
-    const response = await fetch(`/${adminPath}/api/variables`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    const variables = await response.json();
-    const varArray = Object.entries(variables);
-    
-    if (varArray.length === 0) {
-      variablesList.innerHTML = '<div class="loading">No variables found. Create your first one!</div>';
+    const variables = await apiJSON('/variables');
+    const entries = Object.entries(variables);
+
+    if (entries.length === 0) {
+      list.innerHTML = '<div class="empty-state"><p>No variables. Create your first one!</p></div>';
       return;
     }
-    
-    variablesList.innerHTML = varArray.map(([id, variable]) => {
-      const baseUrl = `${window.location.protocol}//${window.location.host}/api/${id}`;
-      const versionUrl = `${baseUrl}/v/${variable.version}`;
-      
+
+    list.innerHTML = entries.map(([id, v]) => {
+      const baseUrl = `${location.protocol}//${location.host}/api/v/${id}`;
+      const versionUrl = `${baseUrl}/version/${v.version}`;
       return `
         <div class="variable-card">
-          <div class="variable-header">
-            <div class="variable-info">
-              <h3>${variable.name}</h3>
-              <div class="variable-meta">
-                <span class="meta-badge">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <polyline points="12 6 12 12 16 14"/>
-                  </svg>
-                  v${variable.version}
-                </span>
-                ${variable.password ? '<span class="meta-badge">🔒 Protected</span>' : ''}
-                <span class="meta-badge">${variable.commits.length} commits</span>
+          <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:1rem;">
+            <div>
+              <h3>${v.name}</h3>
+              <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">
+                <span class="meta-badge">v${v.version}</span>
+                ${v.password ? '<span class="meta-badge">🔒 Protected</span>' : ''}
+                <span class="meta-badge">${v.commits.length} commits</span>
               </div>
             </div>
-            <div class="variable-actions">
-              <button class="btn-secondary" onclick="openCommitModal('${id}', '${variable.version}')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"/>
-                  <polyline points="12 16 16 12 12 8"/>
-                  <line x1="8" y1="12" x2="16" y2="12"/>
-                </svg>
-                Commit
-              </button>
-              <button class="btn-icon" onclick="deleteVariable('${id}')" title="Delete">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="3 6 5 6 21 6"/>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                </svg>
-              </button>
+            <div style="display:flex;gap:0.5rem;">
+              <button class="btn-secondary" onclick="openCommitModal('${id}')">Commit</button>
+              <button class="btn-icon" onclick="deleteVariable('${id}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
             </div>
           </div>
-          
-          <div class="variable-value">${variable.value}</div>
-          
+          <div class="variable-value">${v.value}</div>
           <div class="variable-url-section">
-            <label>Latest Version URL:</label>
+            <label>API URL:</label>
             <div class="url-container">
               <input type="text" value="${baseUrl}" readonly>
-              <button class="btn-copy" onclick="copyToClipboard('${baseUrl}')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                </svg>
-              </button>
+              <button class="btn-copy" onclick="copyToClipboard('${baseUrl}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
             </div>
           </div>
-          
           <div class="variable-url-section">
-            <label>Specific Version URL:</label>
+            <label>Version URL:</label>
             <div class="url-container">
               <input type="text" value="${versionUrl}" readonly>
-              <button class="btn-copy" onclick="copyToClipboard('${versionUrl}')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                </svg>
-              </button>
+              <button class="btn-copy" onclick="copyToClipboard('${versionUrl}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
             </div>
           </div>
-          
-          <div class="commits-list">
-            <h4>Commit History</h4>
-            ${variable.commits.slice().reverse().map(commit => `
-              <div class="commit-item">
-                <span class="commit-version">v${commit.version}</span>
-                <span class="commit-time">${new Date(commit.timestamp).toLocaleString()}</span>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      `;
+          <details style="margin-top:1rem;">
+            <summary style="cursor:pointer;color:var(--text-secondary);font-size:0.9rem;">Commit History (${v.commits.length})</summary>
+            <div style="margin-top:0.5rem;">
+              ${v.commits.slice().reverse().map(c => `<div style="display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid var(--border);font-size:0.85rem;"><span class="meta-badge">v${c.version}</span><span style="color:var(--text-secondary)">${new Date(c.timestamp).toLocaleString()}</span></div>`).join('')}
+            </div>
+          </details>
+        </div>`;
     }).join('');
-  } catch (error) {
-    variablesList.innerHTML = '<div class="loading">Failed to load variables</div>';
-  }
+  } catch (e) { list.innerHTML = '<div class="loading">Failed to load variables</div>'; }
 }
 
-function openCommitModal(id, currentVersion) {
+function openCommitModal(id) {
   document.getElementById('commit-var-id').value = id;
   document.getElementById('commit-value').value = '';
   document.getElementById('commit-version').value = '';
@@ -755,526 +480,565 @@ document.getElementById('commit-submit').addEventListener('click', async () => {
   const id = document.getElementById('commit-var-id').value;
   const value = document.getElementById('commit-value').value;
   const version = document.getElementById('commit-version').value;
-  
-  if (!value || !version) {
-    alert('Please fill in all fields');
-    return;
-  }
-  
+  if (!value || !version) { showToast('Fill all fields', 'error'); return; }
   try {
-    const response = await fetch(`/${adminPath}/api/variables/${id}/commit`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ value, version })
-    });
-    
-    if (response.ok) {
-      commitModal.classList.remove('active');
-      loadVariables();
-      alert('Version committed successfully!');
-    } else {
-      alert('Failed to commit version');
-    }
-  } catch (error) {
-    alert('Failed to commit version');
-  }
+    await apiJSON(`/variables/${id}/commit`, { method: 'POST', body: { value, version } });
+    commitModal.classList.remove('active');
+    loadVariables();
+    showToast('Version committed!', 'success');
+  } catch (e) { showToast('Failed to commit', 'error'); }
 });
 
 async function deleteVariable(id) {
-  if (!confirm('Are you sure you want to delete this variable?')) return;
-  
-  try {
-    const response = await fetch(`/${adminPath}/api/variables/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    if (response.ok) {
-      loadVariables();
-    } else {
-      alert('Failed to delete variable');
-    }
-  } catch (error) {
-    alert('Failed to delete variable');
-  }
+  if (!confirm('Delete this variable?')) return;
+  try { await apiJSON(`/variables/${id}`, { method: 'DELETE' }); loadVariables(); showToast('Deleted', 'success'); }
+  catch (e) { showToast('Failed to delete', 'error'); }
 }
 
 function copyToClipboard(text) {
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand('copy');
-  document.body.removeChild(textarea);
+  navigator.clipboard.writeText(text);
+  showToast('Copied!', 'success');
 }
 
-document.querySelectorAll('.nav-item').forEach(item => {
-  item.addEventListener('click', () => {
-    const tab = item.dataset.tab;
-    if (tab === 'api') {
-      loadVariables();
-    }
-  });
-});
-
+// ============ SITES ============
 
 const siteModal = document.getElementById('site-modal');
-const portModal = document.getElementById('port-modal');
+const siteFilesModal = document.getElementById('site-files-modal');
+const fileEditorModal = document.getElementById('file-editor-modal');
 
-document.getElementById('create-site-btn').addEventListener('click', () => {
-  siteModal.classList.add('active');
-});
-
-document.getElementById('close-site-modal').addEventListener('click', () => {
-  siteModal.classList.remove('active');
-});
-
-document.getElementById('add-port-btn').addEventListener('click', () => {
-  portModal.classList.add('active');
-});
-
-document.getElementById('close-port-modal').addEventListener('click', () => {
-  portModal.classList.remove('active');
-});
+document.getElementById('create-site-btn').addEventListener('click', () => siteModal.classList.add('active'));
+document.getElementById('close-site-modal').addEventListener('click', () => siteModal.classList.remove('active'));
+document.getElementById('close-site-files-modal').addEventListener('click', () => siteFilesModal.classList.remove('active'));
+document.getElementById('close-file-editor-modal').addEventListener('click', () => fileEditorModal.classList.remove('active'));
 
 document.getElementById('create-site-submit').addEventListener('click', async () => {
   const name = document.getElementById('site-name').value;
   const type = document.getElementById('site-type').value;
   const port = document.getElementById('site-port').value;
   const domain = document.getElementById('site-domain').value;
-  
-  if (!name || !port) {
-    alert('Please fill in required fields');
-    return;
-  }
-  
+  if (!name || !port) { showToast('Fill required fields', 'error'); return; }
+
   try {
-    const response = await fetch(`/${adminPath}/api/sites`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ name, type, port: parseInt(port), domain })
-    });
-    
-    if (response.ok) {
-      siteModal.classList.remove('active');
-      loadSites();
-      alert('Site created successfully!');
-    } else {
-      alert('Failed to create site');
-    }
-  } catch (error) {
-    alert('Failed to create site');
-  }
+    await apiJSON('/sites', { method: 'POST', body: { name, type, port: parseInt(port), domain } });
+    siteModal.classList.remove('active');
+    loadSites();
+    showToast('Site created!', 'success');
+  } catch (e) { showToast('Failed to create site', 'error'); }
 });
 
 async function loadSites() {
-  const sitesList = document.getElementById('sites-list');
-  sitesList.innerHTML = '<div class="loading">Loading sites...</div>';
-  
+  const list = document.getElementById('sites-list');
+  list.innerHTML = '<div class="loading">Loading sites...</div>';
+
   try {
-    const response = await fetch(`/${adminPath}/api/sites`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    const sites = await response.json();
-    const sitesArray = Object.values(sites);
-    
-    if (sitesArray.length === 0) {
-      sitesList.innerHTML = '<div class="loading">No sites found. Create your first one!</div>';
+    const sites = await apiJSON('/sites');
+    const arr = Object.values(sites);
+
+    if (arr.length === 0) {
+      list.innerHTML = '<div class="empty-state"><p>No sites. Create your first one!</p></div>';
       return;
     }
-    
-    sitesList.innerHTML = sitesArray.map(site => `
+
+    list.innerHTML = arr.map(site => `
       <div class="site-card">
         <div class="site-header">
           <div class="site-info">
             <h3>${site.name}</h3>
             <div class="site-meta">
               <span class="meta-badge">${site.type}</span>
-              <span class="meta-badge">Port: ${site.port}</span>
+              <span class="meta-badge">:${site.port}</span>
               <span class="meta-badge status-${site.status}">${site.status}</span>
               ${site.domain ? `<span class="meta-badge">${site.domain}</span>` : ''}
             </div>
           </div>
           <div class="site-actions">
-            ${site.status === 'stopped' ? 
-              `<button class="btn-secondary" onclick="startSite('${site.id}')">Start</button>` :
-              `<button class="btn-secondary" onclick="stopSite('${site.id}')">Stop</button>`
+            ${site.status === 'stopped' ?
+              `<button class="btn-primary" onclick="startSite('${site.id}')">▶ Start</button>` :
+              `<button class="btn-secondary" onclick="stopSite('${site.id}')" style="border-color:#ef4444;color:#ef4444;">■ Stop</button>`
             }
-            <button class="btn-secondary" onclick="openSiteFiles('${site.path}')">Files</button>
-            <button class="btn-icon" onclick="deleteSite('${site.id}')" title="Delete">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="3 6 5 6 21 6"/>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-              </svg>
-            </button>
+            <button class="btn-secondary" onclick="openSiteFiles('${site.id}','${site.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}','${site.name}')">📁 Files</button>
+            <button class="btn-secondary" onclick="openSiteTerminal('${site.id}','${site.name}')">💻 Terminal</button>
+            ${site.status === 'running' ? `<a href="http://${location.hostname}:${site.port}" target="_blank" class="btn-secondary">🌐 Open</a>` : ''}
+            <button class="btn-icon" onclick="deleteSite('${site.id}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
           </div>
         </div>
-        <div class="site-path">Path: ${site.path}</div>
+        <div class="site-path">📂 ${site.path}</div>
       </div>
     `).join('');
-  } catch (error) {
-    sitesList.innerHTML = '<div class="loading">Failed to load sites</div>';
-  }
+  } catch (e) { list.innerHTML = '<div class="loading">Failed to load sites</div>'; }
 }
 
 async function startSite(id) {
   try {
-    const response = await fetch(`/${adminPath}/api/sites/${id}/start`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    if (response.ok) {
-      loadSites();
-    }
-  } catch (error) {
-    alert('Failed to start site');
-  }
+    showToast('Starting site...', 'info');
+    const data = await apiJSON(`/sites/${id}/start`, { method: 'POST' });
+    showToast(data.message || 'Site started!', 'success');
+    loadSites();
+  } catch (e) { showToast('Failed: ' + e.message, 'error'); }
 }
 
 async function stopSite(id) {
   try {
-    const response = await fetch(`/${adminPath}/api/sites/${id}/stop`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    if (response.ok) {
-      loadSites();
-    }
-  } catch (error) {
-    alert('Failed to stop site');
-  }
+    await apiJSON(`/sites/${id}/stop`, { method: 'POST' });
+    showToast('Site stopped', 'success');
+    loadSites();
+  } catch (e) { showToast('Failed to stop site', 'error'); }
 }
 
 async function deleteSite(id) {
-  if (!confirm('Are you sure you want to delete this site?')) return;
-  
-  try {
-    const response = await fetch(`/${adminPath}/api/sites/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    if (response.ok) {
-      loadSites();
-    }
-  } catch (error) {
-    alert('Failed to delete site');
-  }
+  if (!confirm('Delete this site and all its files?')) return;
+  try { await apiJSON(`/sites/${id}`, { method: 'DELETE' }); loadSites(); showToast('Deleted', 'success'); }
+  catch (e) { showToast('Failed to delete', 'error'); }
 }
 
-function openSiteFiles(sitePath) {
-  document.querySelector('[data-tab="files"]').click();
-  setTimeout(() => {
-    loadFiles(sitePath);
-  }, 100);
+// ============ SITE FILES ============
+
+async function openSiteFiles(siteId, sitePath, siteName) {
+  currentSiteId = siteId;
+  siteFilesCurrentPath = sitePath;
+  document.getElementById('site-files-title').textContent = `📁 ${siteName}`;
+  siteFilesModal.classList.add('active');
+  loadSiteFiles(sitePath);
 }
+
+async function loadSiteFiles(dirPath) {
+  const list = document.getElementById('site-files-list');
+  list.innerHTML = '<div class="loading">Loading...</div>';
+  siteFilesCurrentPath = dirPath;
+  document.getElementById('site-files-path').textContent = dirPath;
+
+  try {
+    const data = await apiJSON(`/files?path=${encodeURIComponent(dirPath)}`);
+
+    if (data.files.length === 0) {
+      list.innerHTML = '<div class="empty-state"><p>Empty folder</p></div>';
+      return;
+    }
+
+    const folders = data.files.filter(f => f.isDirectory).sort((a, b) => a.name.localeCompare(b.name));
+    const files = data.files.filter(f => !f.isDirectory).sort((a, b) => a.name.localeCompare(b.name));
+
+    list.innerHTML = [...folders, ...files].map(file => {
+      const escapedPath = file.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const isEditable = !file.isDirectory && isTextFile(file.name);
+      return `
+        <div class="site-file-item" ${file.isDirectory ? `ondblclick="loadSiteFiles('${escapedPath}')"` : ''}>
+          <div class="file-info">
+            <div class="file-icon ${file.isDirectory ? 'folder' : 'file'}">
+              ${file.isDirectory ?
+                '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' :
+                '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>'
+              }
+            </div>
+            <span class="file-name">${file.name}</span>
+          </div>
+          <span class="file-meta">${file.isDirectory ? '' : formatBytes(file.size)}</span>
+          <div class="file-actions">
+            ${isEditable ? `<button class="btn-icon-small" onclick="editFile('${escapedPath}','${file.name}')" title="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : ''}
+            <button class="btn-icon-small danger" onclick="deleteSiteFile('${escapedPath}', event)" title="Delete"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (e) { list.innerHTML = `<div class="loading">Error: ${e.message}</div>`; }
+}
+
+function isTextFile(name) {
+  const exts = ['.html','.htm','.css','.js','.jsx','.ts','.tsx','.json','.md','.txt','.py','.php','.rb','.go','.rs','.java','.vue','.svelte','.yaml','.yml','.xml','.env','.gitignore','.sh','.bat','.conf','.cfg','.ini','.toml','.sql','.csv','.log','.htaccess'];
+  return exts.some(ext => name.toLowerCase().endsWith(ext));
+}
+
+document.getElementById('site-files-back').addEventListener('click', () => {
+  const parent = siteFilesCurrentPath.split('/').slice(0, -1).join('/');
+  if (parent) loadSiteFiles(parent);
+});
+
+document.getElementById('site-files-up').addEventListener('click', () => {
+  const parent = siteFilesCurrentPath.split('/').slice(0, -1).join('/');
+  if (parent) loadSiteFiles(parent);
+});
+
+document.getElementById('site-files-new-folder').addEventListener('click', async () => {
+  const name = prompt('Folder name:');
+  if (!name) return;
+  try {
+    await apiJSON('/files/create-folder', { method: 'POST', body: { name, currentPath: siteFilesCurrentPath } });
+    loadSiteFiles(siteFilesCurrentPath);
+    showToast('Folder created', 'success');
+  } catch (e) { showToast('Failed', 'error'); }
+});
+
+document.getElementById('site-files-new-file').addEventListener('click', async () => {
+  const name = prompt('File name (e.g., script.js):');
+  if (!name) return;
+  try {
+    await apiJSON('/files/create-file', { method: 'POST', body: { name, currentPath: siteFilesCurrentPath, content: '' } });
+    loadSiteFiles(siteFilesCurrentPath);
+    showToast('File created', 'success');
+  } catch (e) { showToast('Failed', 'error'); }
+});
+
+document.getElementById('site-files-upload').addEventListener('click', () => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.multiple = true;
+  input.onchange = async (e) => {
+    for (const file of e.target.files) {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('targetPath', siteFilesCurrentPath);
+      try {
+        await fetch(`/${adminPath}/api/sites/upload`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+      } catch (err) { showToast(`Failed to upload ${file.name}`, 'error'); }
+    }
+    loadSiteFiles(siteFilesCurrentPath);
+    showToast('Files uploaded!', 'success');
+  };
+  input.click();
+});
+
+async function deleteSiteFile(filePath, event) {
+  if (event) event.stopPropagation();
+  if (!confirm('Delete this item?')) return;
+  try {
+    await apiJSON('/files', { method: 'DELETE', body: { path: filePath } });
+    loadSiteFiles(siteFilesCurrentPath);
+    showToast('Deleted', 'success');
+  } catch (e) { showToast('Failed to delete', 'error'); }
+}
+
+// ============ FILE EDITOR ============
+
+async function editFile(filePath, fileName) {
+  try {
+    const data = await apiJSON(`/files/content?path=${encodeURIComponent(filePath)}`);
+    document.getElementById('file-editor-title').textContent = `✏️ ${fileName}`;
+    document.getElementById('editor-file-path').value = filePath;
+    document.getElementById('file-editor-content').value = data.content;
+    fileEditorModal.classList.add('active');
+  } catch (e) { showToast('Failed to open file: ' + e.message, 'error'); }
+}
+
+document.getElementById('save-file-btn').addEventListener('click', async () => {
+  const filePath = document.getElementById('editor-file-path').value;
+  const content = document.getElementById('file-editor-content').value;
+  try {
+    await apiJSON('/files/content', { method: 'POST', body: { path: filePath, content } });
+    showToast('File saved!', 'success');
+    fileEditorModal.classList.remove('active');
+    loadSiteFiles(siteFilesCurrentPath);
+  } catch (e) { showToast('Failed to save', 'error'); }
+});
+
+document.getElementById('cancel-edit-btn').addEventListener('click', () => {
+  fileEditorModal.classList.remove('active');
+});
+
+// Tab support in editor
+document.getElementById('file-editor-content').addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const ta = e.target;
+    const start = ta.selectionStart;
+    ta.value = ta.value.substring(0, start) + '  ' + ta.value.substring(ta.selectionEnd);
+    ta.selectionStart = ta.selectionEnd = start + 2;
+  }
+});
+
+// ============ SITE TERMINAL ============
+
+function openSiteTerminal(siteId, siteName) {
+  currentSiteId = siteId;
+
+  // Create terminal modal if not exists
+  let modal = document.getElementById('terminal-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'terminal-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-content modal-large">
+        <div class="modal-header">
+          <h3 id="terminal-title">Terminal</h3>
+          <button class="modal-close" onclick="document.getElementById('terminal-modal').classList.remove('active')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div id="terminal-output" style="background:#0f172a;color:#e2e8f0;font-family:'Courier New',monospace;font-size:0.85rem;padding:1rem;border-radius:8px;min-height:300px;max-height:400px;overflow-y:auto;margin-bottom:1rem;white-space:pre-wrap;word-break:break-all;">Welcome to Welizium Terminal\n$ </div>
+          <div style="display:flex;gap:0.5rem;">
+            <input type="text" id="terminal-input" placeholder="Enter command (npm install, npm run dev, etc.)" style="flex:1;padding:0.75rem 1rem;border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:0.9rem;">
+            <button class="btn-primary" id="terminal-run">Run</button>
+          </div>
+          <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;">
+            <button class="btn-secondary" onclick="terminalCmd('npm install')">npm install</button>
+            <button class="btn-secondary" onclick="terminalCmd('npm run dev')">npm run dev</button>
+            <button class="btn-secondary" onclick="terminalCmd('npm run build')">npm run build</button>
+            <button class="btn-secondary" onclick="terminalCmd('npm start')">npm start</button>
+            <button class="btn-secondary" onclick="terminalCmd('ls -la')">ls -la</button>
+            <button class="btn-secondary" onclick="terminalCmd('cat package.json')">package.json</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    document.getElementById('terminal-run').addEventListener('click', () => {
+      terminalCmd(document.getElementById('terminal-input').value);
+    });
+
+    document.getElementById('terminal-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') terminalCmd(document.getElementById('terminal-input').value);
+    });
+  }
+
+  document.getElementById('terminal-title').textContent = `💻 Terminal — ${siteName}`;
+  document.getElementById('terminal-output').textContent = `Welcome to Welizium Terminal\nSite: ${siteName}\n$ `;
+  modal.classList.add('active');
+}
+
+async function terminalCmd(command) {
+  if (!command || !currentSiteId) return;
+  const output = document.getElementById('terminal-output');
+  const input = document.getElementById('terminal-input');
+  input.value = '';
+
+  output.textContent += `${command}\n`;
+  output.textContent += '⏳ Running...\n';
+  output.scrollTop = output.scrollHeight;
+
+  try {
+    const res = await fetch(`/${adminPath}/api/sites/${currentSiteId}/exec`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command })
+    });
+    const data = await res.json();
+
+    if (data.stdout) output.textContent += data.stdout + '\n';
+    if (data.stderr) output.textContent += data.stderr + '\n';
+    if (!data.success) output.textContent += `❌ Exit code: ${data.exitCode || 'error'}\n`;
+    else output.textContent += '✅ Done\n';
+  } catch (e) {
+    output.textContent += `❌ Error: ${e.message}\n`;
+  }
+
+  output.textContent += '$ ';
+  output.scrollTop = output.scrollHeight;
+}
+
+// ============ SECURITY ============
 
 async function loadSecurity() {
   try {
-    const response = await fetch(`/${adminPath}/api/security`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    const security = await response.json();
-    
-    document.getElementById('security-2fa').checked = security.twoFactor || false;
-    document.getElementById('security-session-timeout').value = security.sessionTimeout || 60;
-    document.getElementById('security-max-attempts').value = security.maxAttempts || 5;
-    document.getElementById('security-force-https').checked = security.forceHttps || false;
-    document.getElementById('security-hsts').checked = security.hsts || false;
-    document.getElementById('security-firewall').checked = security.firewall !== false;
-    document.getElementById('security-block-suspicious').checked = security.blockSuspicious !== false;
-    
+    const s = await apiJSON('/security');
+    document.getElementById('security-2fa').checked = s.twoFactor || false;
+    document.getElementById('security-session-timeout').value = s.sessionTimeout || 60;
+    document.getElementById('security-max-attempts').value = s.maxAttempts || 5;
+    document.getElementById('security-force-https').checked = s.forceHttps || false;
+    document.getElementById('security-hsts').checked = s.hsts || false;
+    document.getElementById('security-firewall').checked = s.firewall !== false;
+    document.getElementById('security-block-suspicious').checked = s.blockSuspicious !== false;
+
     const ipList = document.getElementById('ip-list');
-    if (security.ipWhitelist && security.ipWhitelist.length > 0) {
-      ipList.innerHTML = security.ipWhitelist.map(ip => `
-        <div class="ip-item">
-          <span>${ip}</span>
-          <button class="btn-icon" onclick="removeIP('${ip}')">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
-        </div>
-      `).join('');
+    if (s.ipWhitelist && s.ipWhitelist.length > 0) {
+      ipList.innerHTML = s.ipWhitelist.map(ip => `
+        <div class="ip-item"><span>${ip}</span><button class="btn-icon" onclick="removeIP('${ip}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>`).join('');
     } else {
-      ipList.innerHTML = '<p style="color: var(--text-secondary); padding: 1rem;">No IPs in whitelist</p>';
+      ipList.innerHTML = '<p style="color:var(--text-secondary);padding:1rem;">No IPs in whitelist</p>';
     }
-  } catch (error) {
-    console.error('Failed to load security settings');
-  }
+  } catch (e) { console.error('Security load error:', e); }
 }
 
 document.getElementById('add-ip-btn').addEventListener('click', async () => {
-  const ipInput = document.getElementById('ip-input');
-  const ip = ipInput.value.trim();
-  
+  const ip = document.getElementById('ip-input').value.trim();
   if (!ip) return;
-  
   try {
-    const response = await fetch(`/${adminPath}/api/security`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    const security = await response.json();
-    
-    if (!security.ipWhitelist) {
-      security.ipWhitelist = [];
-    }
-    
-    if (!security.ipWhitelist.includes(ip)) {
-      security.ipWhitelist.push(ip);
-      
-      await fetch(`/${adminPath}/api/security`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(security)
-      });
-      
-      ipInput.value = '';
+    const s = await apiJSON('/security');
+    if (!s.ipWhitelist) s.ipWhitelist = [];
+    if (!s.ipWhitelist.includes(ip)) {
+      s.ipWhitelist.push(ip);
+      await apiJSON('/security', { method: 'POST', body: s });
+      document.getElementById('ip-input').value = '';
       loadSecurity();
     }
-  } catch (error) {
-    alert('Failed to add IP');
-  }
+  } catch (e) { showToast('Failed to add IP', 'error'); }
 });
 
 async function removeIP(ip) {
   try {
-    const response = await fetch(`/${adminPath}/api/security`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    const security = await response.json();
-    security.ipWhitelist = security.ipWhitelist.filter(i => i !== ip);
-    
-    await fetch(`/${adminPath}/api/security`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(security)
-    });
-    
+    const s = await apiJSON('/security');
+    s.ipWhitelist = (s.ipWhitelist || []).filter(i => i !== ip);
+    await apiJSON('/security', { method: 'POST', body: s });
     loadSecurity();
-  } catch (error) {
-    alert('Failed to remove IP');
-  }
+  } catch (e) { showToast('Failed', 'error'); }
 }
 
 document.getElementById('save-security').addEventListener('click', async () => {
-  const security = {
+  const current = await apiJSON('/security');
+  const s = {
     twoFactor: document.getElementById('security-2fa').checked,
     sessionTimeout: parseInt(document.getElementById('security-session-timeout').value),
     maxAttempts: parseInt(document.getElementById('security-max-attempts').value),
     forceHttps: document.getElementById('security-force-https').checked,
     hsts: document.getElementById('security-hsts').checked,
     firewall: document.getElementById('security-firewall').checked,
-    blockSuspicious: document.getElementById('security-block-suspicious').checked
+    blockSuspicious: document.getElementById('security-block-suspicious').checked,
+    ipWhitelist: current.ipWhitelist || []
   };
-  
-  const currentResponse = await fetch(`/${adminPath}/api/security`, {
-    headers: { 'Authorization': `Bearer ${token}` }
-  });
-  const currentSecurity = await currentResponse.json();
-  security.ipWhitelist = currentSecurity.ipWhitelist || [];
-  
   try {
-    const response = await fetch(`/${adminPath}/api/security`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(security)
-    });
-    
-    if (response.ok) {
-      alert('Security settings saved successfully!');
-    }
-  } catch (error) {
-    alert('Failed to save security settings');
-  }
+    await apiJSON('/security', { method: 'POST', body: s });
+    showToast('Security settings saved!', 'success');
+  } catch (e) { showToast('Failed to save', 'error'); }
 });
 
-async function loadPorts() {
-  const portsList = document.getElementById('ports-list');
-  portsList.innerHTML = '<div class="loading">Loading ports...</div>';
-  
-  try {
-    const response = await fetch(`/${adminPath}/api/ports`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    const ports = await response.json();
-    const portsArray = Object.values(ports);
-    
-    if (portsArray.length === 0) {
-      portsList.innerHTML = '<div class="loading">No port rules found. Add your first one!</div>';
-      return;
-    }
-    
-    portsList.innerHTML = portsArray.map(rule => `
-      <div class="port-card">
-        <div class="port-header">
-          <div class="port-info">
-            <h3>Port ${rule.port}</h3>
-            <div class="port-meta">
-              <span class="meta-badge">${rule.protocol.toUpperCase()}</span>
-              <span class="meta-badge action-${rule.action}">${rule.action}</span>
-              <span class="meta-badge status-${rule.enabled ? 'running' : 'stopped'}">${rule.enabled ? 'Enabled' : 'Disabled'}</span>
-            </div>
-            ${rule.description ? `<p class="port-description">${rule.description}</p>` : ''}
-          </div>
-          <div class="port-actions">
-            <button class="btn-secondary" onclick="togglePort('${rule.id}')">
-              ${rule.enabled ? 'Disable' : 'Enable'}
-            </button>
-            <button class="btn-icon" onclick="deletePort('${rule.id}')" title="Delete">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="3 6 5 6 21 6"/>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-    `).join('');
-  } catch (error) {
-    portsList.innerHTML = '<div class="loading">Failed to load ports</div>';
-  }
-}
+// ============ PORTS ============
 
-async function loadActivePorts() {
-  const activePortsList = document.getElementById('active-ports-list');
-  activePortsList.innerHTML = '<div class="loading">Scanning ports...</div>';
-  
-  try {
-    const response = await fetch(`/${adminPath}/api/ports/active`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    const activePorts = await response.json();
-    
-    if (activePorts.length === 0) {
-      activePortsList.innerHTML = '<div class="loading">No active ports detected</div>';
-      return;
-    }
-    
-    activePortsList.innerHTML = activePorts.map(port => `
-      <div class="port-card">
-        <div class="port-header">
-          <div class="port-info">
-            <h3>Port ${port.port}</h3>
-            <div class="port-meta">
-              <span class="meta-badge">${port.protocol.toUpperCase()}</span>
-              <span class="meta-badge status-running">${port.state}</span>
-              <span class="meta-badge">${port.process}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    `).join('');
-  } catch (error) {
-    activePortsList.innerHTML = '<div class="loading">Failed to scan ports</div>';
-  }
-}
+const portModal = document.getElementById('port-modal');
+document.getElementById('add-port-btn').addEventListener('click', () => portModal.classList.add('active'));
+document.getElementById('close-port-modal').addEventListener('click', () => portModal.classList.remove('active'));
 
 document.getElementById('add-port-submit').addEventListener('click', async () => {
   const port = document.getElementById('port-number').value;
   const protocol = document.getElementById('port-protocol').value;
   const action = document.getElementById('port-action').value;
   const description = document.getElementById('port-description').value;
-  
-  if (!port) {
-    alert('Please enter a port number');
-    return;
-  }
-  
+  if (!port) { showToast('Enter port number', 'error'); return; }
+
   try {
-    const response = await fetch(`/${adminPath}/api/ports`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ port: parseInt(port), protocol, action, description })
-    });
-    
-    if (response.ok) {
-      portModal.classList.remove('active');
-      loadPorts();
-      document.getElementById('port-number').value = '';
-      document.getElementById('port-description').value = '';
-    } else {
-      alert('Failed to add port rule');
-    }
-  } catch (error) {
-    alert('Failed to add port rule');
-  }
+    await apiJSON('/ports', { method: 'POST', body: { port: parseInt(port), protocol, action, description } });
+    portModal.classList.remove('active');
+    loadPorts();
+    document.getElementById('port-number').value = '';
+    document.getElementById('port-description').value = '';
+    showToast('Port rule added', 'success');
+  } catch (e) { showToast('Failed', 'error'); }
 });
 
-async function togglePort(id) {
+async function loadPorts() {
+  const list = document.getElementById('ports-list');
+  list.innerHTML = '<div class="loading">Loading...</div>';
+
   try {
-    const response = await fetch(`/${adminPath}/api/ports/${id}/toggle`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    if (response.ok) {
-      loadPorts();
+    const ports = await apiJSON('/ports');
+    const arr = Object.values(ports);
+
+    if (arr.length === 0) {
+      list.innerHTML = '<div class="empty-state"><p>No firewall rules</p></div>';
+      return;
     }
-  } catch (error) {
-    alert('Failed to toggle port');
-  }
+
+    list.innerHTML = arr.map(rule => `
+      <div class="port-card">
+        <div class="port-header">
+          <div class="port-info">
+            <h3>Port ${rule.port}</h3>
+            <div class="port-meta">
+              <span class="meta-badge">${rule.protocol.toUpperCase()}</span>
+              <span class="meta-badge action-${rule.action}">${rule.action.toUpperCase()}</span>
+              <span class="meta-badge status-${rule.enabled ? 'running' : 'stopped'}">${rule.enabled ? 'Enabled' : 'Disabled'}</span>
+              <span class="meta-badge">${rule.applied ? '✅ Applied' : '⚪ Not applied'}</span>
+              ${rule.method ? `<span class="meta-badge">${rule.method}</span>` : ''}
+            </div>
+            ${rule.description ? `<p class="port-description">${rule.description}</p>` : ''}
+          </div>
+          <div class="port-actions">
+            ${!rule.applied ?
+              `<button class="btn-primary" onclick="applyPortRule('${rule.id}')" style="font-size:0.8rem;">Apply Rule</button>` :
+              `<button class="btn-secondary" onclick="removePortRule('${rule.id}')" style="font-size:0.8rem;">Remove Rule</button>`
+            }
+            <button class="btn-secondary" onclick="togglePort('${rule.id}')" style="font-size:0.8rem;">${rule.enabled ? 'Disable' : 'Enable'}</button>
+            <button class="btn-icon" onclick="deletePort('${rule.id}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+          </div>
+        </div>
+      </div>`).join('');
+  } catch (e) { list.innerHTML = '<div class="loading">Failed to load ports</div>'; }
+}
+
+async function loadActivePorts() {
+  const list = document.getElementById('active-ports-list');
+  list.innerHTML = '<div class="loading">Scanning...</div>';
+  try {
+    const res = await fetch(`/${adminPath}/api/ports/active`, { headers: { 'Authorization': `Bearer ${token}` } });
+    const ports = await res.json();
+    if (ports.length === 0) { list.innerHTML = '<div class="empty-state"><p>No active ports</p></div>'; return; }
+    list.innerHTML = ports.map(p => `
+      <div class="port-card" style="padding:1rem;margin-bottom:0.5rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <strong>:${p.port}</strong>
+            <div style="display:flex;gap:0.5rem;margin-top:0.25rem;">
+              <span class="meta-badge">${p.protocol.toUpperCase()}</span>
+              <span class="meta-badge status-running">${p.state}</span>
+              <span class="meta-badge">${p.process}</span>
+            </div>
+          </div>
+        </div>
+      </div>`).join('');
+  } catch (e) { list.innerHTML = '<div class="loading">Failed to scan</div>'; }
+}
+
+async function applyPortRule(id) {
+  try {
+    const data = await apiJSON(`/ports/${id}/apply`, { method: 'POST' });
+    if (data.success) showToast(`Rule applied via ${data.method}`, 'success');
+    else showToast(data.error || 'Failed — need root privileges', 'error');
+    loadPorts();
+  } catch (e) { showToast('Failed: ' + e.message, 'error'); }
+}
+
+async function removePortRule(id) {
+  try {
+    await apiJSON(`/ports/${id}/remove-rule`, { method: 'POST' });
+    showToast('Rule removed', 'success');
+    loadPorts();
+  } catch (e) { showToast('Failed', 'error'); }
+}
+
+async function togglePort(id) {
+  try { await apiJSON(`/ports/${id}/toggle`, { method: 'POST' }); loadPorts(); }
+  catch (e) { showToast('Failed', 'error'); }
 }
 
 async function deletePort(id) {
-  if (!confirm('Are you sure you want to delete this port rule?')) return;
-  
-  try {
-    const response = await fetch(`/${adminPath}/api/ports/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    if (response.ok) {
-      loadPorts();
-    }
-  } catch (error) {
-    alert('Failed to delete port rule');
-  }
+  if (!confirm('Delete this port rule?')) return;
+  try { await apiJSON(`/ports/${id}`, { method: 'DELETE' }); loadPorts(); showToast('Deleted', 'success'); }
+  catch (e) { showToast('Failed', 'error'); }
 }
 
-document.getElementById('refresh-ports-btn').addEventListener('click', () => {
-  loadPorts();
-  loadActivePorts();
-});
+document.getElementById('refresh-ports-btn').addEventListener('click', () => { loadPorts(); loadActivePorts(); });
 
-document.querySelectorAll('.nav-item').forEach(item => {
-  item.addEventListener('click', () => {
-    const tab = item.dataset.tab;
-    if (tab === 'sites') {
-      loadSites();
-    } else if (tab === 'security') {
-      loadSecurity();
-    } else if (tab === 'ports') {
-      loadPorts();
-      loadActivePorts();
-    }
-  });
-});
+// ============ UTILS ============
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
+}
+
+function formatDate(date) {
+  return new Date(date).toLocaleString();
+}
+
+// ============ AUTO LOGIN ============
+
+const savedToken = localStorage.getItem('token');
+const savedAdminPath = localStorage.getItem('adminPath');
+const pathParts = window.location.pathname.split('/').filter(p => p);
+const urlPath = pathParts[0] || '';
+
+if (!urlPath) {
+  loginError.textContent = 'Invalid URL.';
+  loginError.classList.add('show');
+  document.getElementById('username').disabled = true;
+  document.getElementById('password').disabled = true;
+  document.querySelector('.btn-login').disabled = true;
+} else if (savedToken && savedAdminPath && urlPath === savedAdminPath) {
+  token = savedToken;
+  adminPath = savedAdminPath;
+  showAdminScreen();
+}
