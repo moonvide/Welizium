@@ -176,9 +176,11 @@ app.get(`/${ADMIN_PATH}/api/files`, authenticateToken, async (req, res) => {
     const safePath = path.resolve(dirPath);
     
     const uploadsPath = path.resolve(UPLOAD_DIR);
+    const sitesPath = path.resolve(path.join(__dirname, 'sites'));
     
-    if (!safePath.startsWith(uploadsPath)) {
-      return res.status(403).json({ error: 'Access denied: Path outside uploads directory' });
+    // Allow access to uploads directory or sites directory
+    if (!safePath.startsWith(uploadsPath) && !safePath.startsWith(sitesPath)) {
+      return res.status(403).json({ error: 'Access denied: Path outside allowed directories' });
     }
 
     if (!fsSync.existsSync(safePath)) {
@@ -249,8 +251,10 @@ app.delete(`/${ADMIN_PATH}/api/files`, authenticateToken, async (req, res) => {
     const safePath = path.resolve(filePath);
     
     const uploadsPath = path.resolve(UPLOAD_DIR);
+    const sitesPath = path.resolve(path.join(__dirname, 'sites'));
     
-    if (!safePath.startsWith(uploadsPath)) {
+    // Allow deletion in uploads or sites directories
+    if (!safePath.startsWith(uploadsPath) && !safePath.startsWith(sitesPath)) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -411,141 +415,6 @@ app.get('/api/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('API error:', error);
-    res.status(500).json({ error: 'Failed to retrieve variable' });
-  }
-});
-
-app.get('/api/:id/v/:version', async (req, res) => {
-  try {
-    const { id, version } = req.params;
-    const password = req.query.password || '';
-    
-    const apiDb = JSON.parse(fsSync.readFileSync('api.json', 'utf8'));
-    const variable = apiDb[id];
-    
-    if (!variable) {
-      return res.status(404).json({ error: 'Variable not found' });
-    }
-    
-    if (variable.password) {
-      const validPassword = await bcrypt.compare(password, variable.password);
-      if (!validPassword) {
-        return res.status(403).json({ error: 'Invalid password' });
-      }
-    }
-    
-    if (version !== variable.version) {
-      const redirectDelay = variable.redirectDelay || 0;
-      const newUrl = `${req.protocol}://${req.get('host')}/api/${id}${password ? `?password=${password}` : ''}`;
-      
-      if (redirectDelay > 0) {
-        return res.send(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="UTF-8">
-            <title>Version Outdated</title>
-            <style>
-              body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                min-height: 100vh;
-                margin: 0;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-              }
-              .container {
-                background: white;
-                padding: 3rem;
-                border-radius: 16px;
-                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-                text-align: center;
-                max-width: 500px;
-              }
-              h1 {
-                color: #f59e0b;
-                margin-bottom: 1rem;
-              }
-              p {
-                color: #64748b;
-                margin-bottom: 1.5rem;
-              }
-              .version {
-                font-family: monospace;
-                background: #f8fafc;
-                padding: 0.5rem 1rem;
-                border-radius: 8px;
-                display: inline-block;
-                margin: 0.5rem;
-              }
-              .countdown {
-                font-size: 2rem;
-                font-weight: bold;
-                color: #3b82f6;
-                margin: 1rem 0;
-              }
-              a {
-                display: inline-block;
-                padding: 0.875rem 2rem;
-                background: #3b82f6;
-                color: white;
-                text-decoration: none;
-                border-radius: 8px;
-                font-weight: 600;
-                transition: all 0.2s;
-              }
-              a:hover {
-                background: #2563eb;
-                transform: translateY(-2px);
-              }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <h1>⚠️ Version Outdated</h1>
-              <p>You are accessing an old version of this variable.</p>
-              <div>
-                <span class="version">Old: v${version}</span>
-                <span class="version">Current: v${variable.version}</span>
-              </div>
-              <div class="countdown" id="countdown">${redirectDelay}</div>
-              <p>Redirecting to the latest version...</p>
-              <a href="${newUrl}">Go Now</a>
-            </div>
-            <script>
-              let seconds = ${redirectDelay};
-              const countdown = document.getElementById('countdown');
-              const interval = setInterval(() => {
-                seconds--;
-                countdown.textContent = seconds;
-                if (seconds <= 0) {
-                  clearInterval(interval);
-                  window.location.href = '${newUrl}';
-                }
-              }, 1000);
-            </script>
-          </body>
-          </html>
-        `);
-      } else {
-        return res.redirect(newUrl);
-      }
-    }
-    
-    const commit = variable.commits.find(c => c.version === version);
-    
-    if (commit) {
-      res.json({
-        name: variable.name,
-        value: commit.value,
-        version: commit.version,
-        timestamp: commit.timestamp
-      });
-    } else {
-      res.status(404).json({ error: 'Version not found' });
-    }
-  } catch (error) {
     res.status(500).json({ error: 'Failed to retrieve variable' });
   }
 });

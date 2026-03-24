@@ -430,9 +430,7 @@ EOFCLI
 chmod +x /usr/local/bin/welizium
 success "Утилита установлена (введите в консоль: welizium)"
 
-# ==========================================
-# Финальный вывод
-# ==========================================
+
 SERVER_IP=$(curl -s ifconfig.me || hostname -I | awk '{print $1}')
 ADMIN_PATH=$(node -e "console.log(require('./config.json').adminPath)")
 ADMIN_USER=$(node -e "console.log(require('./config.json').users[0].username)")
