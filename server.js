@@ -11,6 +11,9 @@ const rateLimit = require('express-rate-limit');
 const crypto = require('crypto');
 const https = require('https');
 const http = require('http');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
 
 const app = express();
 const PORT = 1337;
@@ -175,7 +178,11 @@ app.get(`/${ADMIN_PATH}/api/files`, authenticateToken, async (req, res) => {
     const uploadsPath = path.resolve(UPLOAD_DIR);
     
     if (!safePath.startsWith(uploadsPath)) {
-      return res.status(403).json({ error: 'Access denied' });
+      return res.status(403).json({ error: 'Access denied: Path outside uploads directory' });
+    }
+
+    if (!fsSync.existsSync(safePath)) {
+      return res.status(404).json({ error: 'Directory not found' });
     }
 
     const items = await fs.readdir(safePath, { withFileTypes: true });
@@ -199,7 +206,8 @@ app.get(`/${ADMIN_PATH}/api/files`, authenticateToken, async (req, res) => {
 
     res.json({ files: files.filter(f => f !== null), currentPath: safePath });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to read directory' });
+    console.error('File list error:', error);
+    res.status(500).json({ error: 'Failed to read directory: ' + error.message });
   }
 });
 
@@ -402,6 +410,7 @@ app.get('/api/:id', async (req, res) => {
       createdAt: variable.createdAt
     });
   } catch (error) {
+    console.error('API error:', error);
     res.status(500).json({ error: 'Failed to retrieve variable' });
   }
 });
@@ -801,6 +810,53 @@ app.get(`/${ADMIN_PATH}/api/ports`, authenticateToken, async (req, res) => {
     res.json(portsDb);
   } catch (error) {
     res.json({});
+  }
+});
+
+app.get(`/${ADMIN_PATH}/api/ports/active`, authenticateToken, async (req, res) => {
+  try {
+    const { stdout } = await execPromise('ss -tulnp 2>/dev/null || netstat -tulnp 2>/dev/null || echo ""');
+    
+    const lines = stdout.split('\n').filter(line => line.includes('LISTEN') || line.includes('UNCONN'));
+    const activePorts = [];
+    
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/);
+      if (parts.length < 5) continue;
+      
+      const protocol = parts[0].toLowerCase().includes('tcp') ? 'tcp' : 'udp';
+      const addressPort = parts[4] || parts[3];
+      
+      if (!addressPort || !addressPort.includes(':')) continue;
+      
+      const portMatch = addressPort.match(/:(\d+)$/);
+      if (!portMatch) continue;
+      
+      const port = parseInt(portMatch[1]);
+      if (port < 1 || port > 65535) continue;
+      
+      let process = 'unknown';
+      const processMatch = line.match(/users:\(\("([^"]+)"/);
+      if (processMatch) {
+        process = processMatch[1];
+      }
+      
+      if (!activePorts.find(p => p.port === port && p.protocol === protocol)) {
+        activePorts.push({
+          port,
+          protocol,
+          process,
+          state: protocol === 'tcp' ? 'LISTEN' : 'UNCONN'
+        });
+      }
+    }
+    
+    activePorts.sort((a, b) => a.port - b.port);
+    
+    res.json(activePorts);
+  } catch (error) {
+    console.error('Failed to get active ports:', error);
+    res.json([]);
   }
 });
 

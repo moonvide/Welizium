@@ -502,16 +502,36 @@
       <div id="ports-tab" class="tab-content">
         <h2 class="page-title">Port Management</h2>
         <div class="ports-container">
-          <button class="btn-primary" id="add-port-btn" style="margin-bottom: 1.5rem;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"/>
-              <line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-            Add Port Rule
-          </button>
+          <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+            <button class="btn-primary" id="add-port-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              Add Port Rule
+            </button>
+            <button class="btn-secondary" id="refresh-ports-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"/>
+                <polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+              Refresh
+            </button>
+          </div>
           
-          <div class="ports-list" id="ports-list">
-            <div class="loading">Loading ports...</div>
+          <div class="info-section" style="margin-bottom: 1.5rem;">
+            <h3>Active Ports</h3>
+            <div class="ports-list" id="active-ports-list">
+              <div class="loading">Loading active ports...</div>
+            </div>
+          </div>
+          
+          <div class="info-section">
+            <h3>Firewall Rules</h3>
+            <div class="ports-list" id="ports-list">
+              <div class="loading">Loading ports...</div>
+            </div>
           </div>
         </div>
       </div>
@@ -531,10 +551,19 @@
       </div>
       <div class="modal-body">
         <div class="input-group">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
           <label>Site Name</label>
           <input type="text" id="site-name" placeholder="my-website">
         </div>
         <div class="input-group">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
           <label>Site Type</label>
           <select id="site-type">
             <option value="static">Static HTML</option>
@@ -546,10 +575,18 @@
           </select>
         </div>
         <div class="input-group">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+          </svg>
           <label>Port</label>
           <input type="number" id="site-port" placeholder="3000" min="1024" max="65535">
         </div>
         <div class="input-group">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+          </svg>
           <label>Domain (optional)</label>
           <input type="text" id="site-domain" placeholder="example.com">
         </div>
@@ -571,10 +608,18 @@
       </div>
       <div class="modal-body">
         <div class="input-group">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+          </svg>
           <label>Port Number</label>
           <input type="number" id="port-number" placeholder="8080" min="1" max="65535">
         </div>
         <div class="input-group">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="16 18 22 12 16 6"/>
+            <polyline points="8 6 2 12 8 18"/>
+          </svg>
           <label>Protocol</label>
           <select id="port-protocol">
             <option value="tcp">TCP</option>
@@ -583,6 +628,9 @@
           </select>
         </div>
         <div class="input-group">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
           <label>Action</label>
           <select id="port-action">
             <option value="allow">Allow</option>
@@ -590,6 +638,13 @@
           </select>
         </div>
         <div class="input-group">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
           <label>Description</label>
           <input type="text" id="port-description" placeholder="Web server">
         </div>
@@ -611,6 +666,10 @@
       </div>
       <div class="modal-body">
         <div class="input-group">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
           <label>Variable Name</label>
           <input type="text" id="var-name" placeholder="e.g., APP_VERSION">
         </div>
@@ -619,14 +678,26 @@
           <textarea id="var-value" rows="4" placeholder="Variable value"></textarea>
         </div>
         <div class="input-group">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
           <label>Version</label>
           <input type="text" id="var-version" placeholder="e.g., 1.0.0">
         </div>
         <div class="input-group">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
           <label>Password Protection (optional)</label>
           <input type="password" id="var-password" placeholder="Leave empty for no password">
         </div>
         <div class="input-group">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
           <label>Redirect Delay (seconds)</label>
           <input type="number" id="var-redirect-delay" value="5" min="0" max="60">
           <small>Delay before redirecting from old version (0 = instant)</small>
@@ -669,6 +740,10 @@
           <textarea id="commit-value" rows="4" placeholder="New variable value"></textarea>
         </div>
         <div class="input-group">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
           <label>New Version</label>
           <input type="text" id="commit-version" placeholder="e.g., 1.1.0">
         </div>

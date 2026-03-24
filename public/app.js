@@ -457,6 +457,8 @@ async function loadSettings() {
     document.getElementById('setting-timeout').value = settings.sessionTimeout || 60;
     document.getElementById('setting-requirepass').checked = settings.requirePasswordOnDownload || false;
     document.getElementById('setting-language').value = settings.language || 'en';
+    
+    applySettings(settings);
   } catch (error) {
     console.error('Failed to load settings');
   }
@@ -490,12 +492,31 @@ document.getElementById('save-settings').addEventListener('click', async () => {
     });
     
     if (response.ok) {
+      applySettings(settings);
       alert('Settings saved successfully!');
     }
   } catch (error) {
     alert('Failed to save settings');
   }
 });
+
+function applySettings(settings) {
+  if (settings.theme === 'dark') {
+    document.body.classList.add('dark-theme');
+  } else {
+    document.body.classList.remove('dark-theme');
+  }
+  
+  if (settings.compactMode) {
+    document.body.classList.add('compact-mode');
+  } else {
+    document.body.classList.remove('compact-mode');
+  }
+  
+  if (settings.autoRefresh) {
+    startAutoRefresh();
+  }
+}
 
 function formatBytes(bytes) {
   if (bytes === 0) return '0 Bytes';
@@ -1138,6 +1159,41 @@ async function loadPorts() {
   }
 }
 
+async function loadActivePorts() {
+  const activePortsList = document.getElementById('active-ports-list');
+  activePortsList.innerHTML = '<div class="loading">Scanning ports...</div>';
+  
+  try {
+    const response = await fetch(`/${adminPath}/api/ports/active`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    const activePorts = await response.json();
+    
+    if (activePorts.length === 0) {
+      activePortsList.innerHTML = '<div class="loading">No active ports detected</div>';
+      return;
+    }
+    
+    activePortsList.innerHTML = activePorts.map(port => `
+      <div class="port-card">
+        <div class="port-header">
+          <div class="port-info">
+            <h3>Port ${port.port}</h3>
+            <div class="port-meta">
+              <span class="meta-badge">${port.protocol.toUpperCase()}</span>
+              <span class="meta-badge status-running">${port.state}</span>
+              <span class="meta-badge">${port.process}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  } catch (error) {
+    activePortsList.innerHTML = '<div class="loading">Failed to scan ports</div>';
+  }
+}
+
 document.getElementById('add-port-submit').addEventListener('click', async () => {
   const port = document.getElementById('port-number').value;
   const protocol = document.getElementById('port-protocol').value;
@@ -1204,6 +1260,11 @@ async function deletePort(id) {
   }
 }
 
+document.getElementById('refresh-ports-btn').addEventListener('click', () => {
+  loadPorts();
+  loadActivePorts();
+});
+
 document.querySelectorAll('.nav-item').forEach(item => {
   item.addEventListener('click', () => {
     const tab = item.dataset.tab;
@@ -1213,6 +1274,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
       loadSecurity();
     } else if (tab === 'ports') {
       loadPorts();
+      loadActivePorts();
     }
   });
 });

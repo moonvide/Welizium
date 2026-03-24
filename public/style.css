@@ -40,6 +40,10 @@
   --radius-xl: 24px;
 }
 
+* {
+  font-family: 'Onest', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
 body {
   font-family: 'Onest', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: var(--bg);
@@ -47,6 +51,10 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+input, select, textarea, button {
+  font-family: 'Onest', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 /* Custom Scrollbar */
@@ -455,9 +463,36 @@ body {
   font-size: 0.9rem;
   background: var(--surface);
   outline: none; transition: all 0.2s;
+  font-family: 'Onest', sans-serif;
 }
 
 .setting-item select:focus, .setting-item input:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+
+select {
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  background: var(--surface);
+  outline: none;
+  transition: all 0.2s;
+  font-family: 'Onest', sans-serif;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.5rem;
+}
+
+select:hover {
+  border-color: var(--primary);
+}
+
+select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
 
 /* Switch Toggle (replaces checkbox) */
 .setting-item input[type="checkbox"] {
@@ -749,4 +784,143 @@ body {
 
 #admin-screen.has-warning {
   padding-top: 60px;
+}
+
+body.dark-theme {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface-hover: #334155;
+  --text: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --border: #334155;
+}
+
+body.compact-mode .stat-card {
+  padding: 1rem;
+}
+
+body.compact-mode .file-item {
+  padding: 0.75rem 1rem;
+}
+
+body.compact-mode .page-title {
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+body.compact-mode .sidebar {
+  width: 220px;
+}
+
+body.compact-mode .main-content {
+  padding: 2rem;
+}
+
+
+.url-container {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
+.url-container input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+
+.url-container input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.btn-copy {
+  padding: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.btn-copy:hover {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.variable-url-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.variable-url-section label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.modal-body .input-group {
+  position: relative;
+  margin-bottom: 1.25rem;
+}
+
+.modal-body .input-group svg {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.modal-body .input-group input[type="text"],
+.modal-body .input-group input[type="password"],
+.modal-body .input-group input[type="number"],
+.modal-body .input-group textarea {
+  width: 100%;
+  padding: 0.75rem 1rem 0.75rem 3rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+  transition: all 0.2s;
+  font-family: 'Onest', sans-serif;
+}
+
+.modal-body .input-group textarea {
+  padding: 0.75rem 1rem;
+  resize: vertical;
+  min-height: 100px;
+}
+
+.modal-body .input-group input:focus,
+.modal-body .input-group textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.modal-body .input-group small {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
 }
