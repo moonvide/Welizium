@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welizium Admin Panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="login-screen" class="screen active">
+    <div class="login-background">
+      <div class="login-shapes">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+      </div>
+    </div>
+    <div class="login-container">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <h1>Welizium</h1>
+        <p class="subtitle">Admin Panel</p>
+      </div>
+      <form id="login-form">
+        <div class="input-group">
+          <div class="input-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <input type="text" id="username" placeholder="Username" required>
+        </div>
+        <div class="input-group">
+          <div class="input-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </div>
+          <input type="password" id="password" placeholder="Password" required>
+        </div>
+        <button type="submit" class="btn-primary btn-login">
+          <span>Sign In</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="5" y1="12" x2="19" y2="12"/>
+            <polyline points="12 5 19 12 12 19"/>
+          </svg>
+        </button>
+        <div id="login-error" class="error-message"></div>
+      </form>
+      <div class="login-footer">
+        <p>Powered by Welizium v1.0</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="admin-screen" class="screen">
+    <div id="https-warning" class="https-warning">
+      <div class="https-warning-content">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <span>You're using HTTP. Consider switching to HTTPS for better security.</span>
+        <button class="https-warning-close" id="close-https-warning">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    
+    <nav class="sidebar">
+      <div class="sidebar-header">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+          <path d="M2 17l10 5 10-5"/>
+          <path d="M2 12l10 5 10-5"/>
+        </svg>
+        <h2>Welizium</h2>
+      </div>
+      <ul class="nav-menu">
+        <li class="nav-item active" data-tab="dashboard">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7"/>
+            <rect x="14" y="3" width="7" height="7"/>
+            <rect x="14" y="14" width="7" height="7"/>
+            <rect x="3" y="14" width="7" height="7"/>
+          </svg>
+          <span>Dashboard</span>
+        </li>
+        <li class="nav-item" data-tab="files">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+            <polyline points="13 2 13 9 20 9"/>
+          </svg>
+          <span>Files</span>
+        </li>
+        <li class="nav-item" data-tab="settings">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 1v6m0 6v6m5.2-13.2l-4.2 4.2m0 6l4.2 4.2M23 12h-6m-6 0H1m18.2 5.2l-4.2-4.2m0-6l4.2-4.2"/>
+          </svg>
+          <span>Settings</span>
+        </li>
+        <li class="nav-item" data-tab="api">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="16 18 22 12 16 6"/>
+            <polyline points="8 6 2 12 8 18"/>
+          </svg>
+          <span>API</span>
+        </li>
+        <li class="nav-item" data-tab="sites">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          <span>Sites</span>
+        </li>
+        <li class="nav-item" data-tab="security">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          <span>Security</span>
+        </li>
+        <li class="nav-item" data-tab="ports">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+          </svg>
+          <span>Ports</span>
+        </li>
+      </ul>
+      <button id="logout-btn" class="logout-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        <span>Logout</span>
+      </button>
+    </nav>
+
+    <main class="main-content">
+      <div id="dashboard-tab" class="tab-content active">
+        <h2 class="page-title">System Overview</h2>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon cpu">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="4" y="4" width="16" height="16" rx="2" ry="2"/>
+                <rect x="9" y="9" width="6" height="6"/>
+                <line x1="9" y1="1" x2="9" y2="4"/>
+                <line x1="15" y1="1" x2="15" y2="4"/>
+                <line x1="9" y1="20" x2="9" y2="23"/>
+                <line x1="15" y1="20" x2="15" y2="23"/>
+                <line x1="20" y1="9" x2="23" y2="9"/>
+                <line x1="20" y1="14" x2="23" y2="14"/>
+                <line x1="1" y1="9" x2="4" y2="9"/>
+                <line x1="1" y1="14" x2="4" y2="14"/>
+              </svg>
+            </div>
+            <div class="stat-info">
+              <h3>CPU Usage</h3>
+              <p class="stat-value" id="cpu-usage">-</p>
+              <p class="stat-label" id="cpu-model">-</p>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon memory">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M2 20h20"/>
+                <path d="M5 20V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/>
+                <path d="M9 4v16"/>
+                <path d="M15 4v16"/>
+              </svg>
+            </div>
+            <div class="stat-info">
+              <h3>Memory</h3>
+              <p class="stat-value" id="memory-usage">-</p>
+              <p class="stat-label" id="memory-total">-</p>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon disk">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+              </svg>
+            </div>
+            <div class="stat-info">
+              <h3>Disk Space</h3>
+              <p class="stat-value" id="disk-usage">-</p>
+              <p class="stat-label" id="disk-total">-</p>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon uptime">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+            </div>
+            <div class="stat-info">
+              <h3>Uptime</h3>
+              <p class="stat-value" id="uptime">-</p>
+              <p class="stat-label" id="os-info">-</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-section">
+          <h3>System Information</h3>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Hostname:</span>
+              <span class="info-value" id="hostname">-</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Platform:</span>
+              <span class="info-value" id="platform">-</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Processes:</span>
+              <span class="info-value" id="processes">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="files-tab" class="tab-content">
+        <h2 class="page-title">File Manager</h2>
+        <div class="files-toolbar">
+          <div class="toolbar-left">
+            <button class="btn-icon-toolbar" id="back-btn" title="Back">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="19" y1="12" x2="5" y2="12"/>
+                <polyline points="12 19 5 12 12 5"/>
+              </svg>
+            </button>
+            <button class="btn-icon-toolbar" id="forward-btn" title="Forward">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+                <polyline points="12 5 19 12 12 19"/>
+              </svg>
+            </button>
+            <button class="btn-icon-toolbar" id="up-btn" title="Up">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="19" x2="12" y2="5"/>
+                <polyline points="5 12 12 5 19 12"/>
+              </svg>
+            </button>
+            <button class="btn-icon-toolbar" id="home-btn" title="Uploads">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                <polyline points="9 22 9 12 15 12 15 22"/>
+              </svg>
+            </button>
+            <div class="path-breadcrumb" id="path-breadcrumb"></div>
+          </div>
+          <div class="toolbar-right">
+            <button class="btn-secondary" id="new-folder-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                <line x1="12" y1="11" x2="12" y2="17"/>
+                <line x1="9" y1="14" x2="15" y2="14"/>
+              </svg>
+              New Folder
+            </button>
+            <button class="btn-primary" id="upload-file-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              Upload
+            </button>
+            <button class="btn-secondary" id="refresh-files">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"/>
+                <polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+        <div class="files-container">
+          <div class="files-list" id="files-list">
+            <div class="loading">Loading files...</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="settings-tab" class="tab-content">
+        <h2 class="page-title">Settings</h2>
+        <div class="settings-container">
+          <div class="settings-section">
+            <h3>Appearance</h3>
+            <div class="setting-item">
+              <label>Theme</label>
+              <select id="setting-theme">
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+                <option value="auto">Auto</option>
+              </select>
+            </div>
+            <div class="setting-item">
+              <label>Compact Mode</label>
+              <input type="checkbox" id="setting-compact">
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>System Monitoring</h3>
+            <div class="setting-item">
+              <label>Auto Refresh</label>
+              <input type="checkbox" id="setting-autorefresh" checked>
+            </div>
+            <div class="setting-item">
+              <label>Refresh Interval (seconds)</label>
+              <input type="number" id="setting-interval" value="5" min="1" max="60">
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>File Manager</h3>
+            <div class="setting-item">
+              <label>Show Hidden Files</label>
+              <input type="checkbox" id="setting-hidden">
+            </div>
+            <div class="setting-item">
+              <label>Date Format</label>
+              <select id="setting-dateformat">
+                <option value="locale">Local Format</option>
+                <option value="iso">ISO 8601</option>
+                <option value="relative">Relative Time</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Upload Settings</h3>
+            <div class="setting-item">
+              <label>Max Upload Size (MB)</label>
+              <input type="number" id="setting-maxupload" value="100" min="1" max="1000">
+            </div>
+            <div class="setting-item">
+              <label>Default Password Protection</label>
+              <input type="checkbox" id="setting-defaultpass">
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Notifications</h3>
+            <div class="setting-item">
+              <label>Enable Notifications</label>
+              <input type="checkbox" id="setting-notifications" checked>
+            </div>
+            <div class="setting-item">
+              <label>Sound Effects</label>
+              <input type="checkbox" id="setting-sounds">
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Security</h3>
+            <div class="setting-item">
+              <label>Session Timeout (minutes)</label>
+              <input type="number" id="setting-timeout" value="60" min="5" max="1440">
+            </div>
+            <div class="setting-item">
+              <label>Require Password on Download</label>
+              <input type="checkbox" id="setting-requirepass">
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Language & Region</h3>
+            <div class="setting-item">
+              <label>Language</label>
+              <select id="setting-language">
+                <option value="en">English</option>
+                <option value="ru">Русский</option>
+                <option value="es">Español</option>
+                <option value="de">Deutsch</option>
+              </select>
+            </div>
+          </div>
+
+          <button class="btn-primary" id="save-settings">Save Settings</button>
+        </div>
+      </div>
+
+      <div id="api-tab" class="tab-content">
+        <h2 class="page-title">API Variables</h2>
+        <div class="api-container">
+          <button class="btn-primary" id="create-variable-btn" style="margin-bottom: 1.5rem;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Create Variable
+          </button>
+          
+          <div class="variables-list" id="variables-list">
+            <div class="loading">Loading variables...</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="sites-tab" class="tab-content">
+        <h2 class="page-title">Sites Manager</h2>
+        <div class="sites-container">
+          <button class="btn-primary" id="create-site-btn" style="margin-bottom: 1.5rem;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Create Site
+          </button>
+          
+          <div class="sites-list" id="sites-list">
+            <div class="loading">Loading sites...</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="security-tab" class="tab-content">
+        <h2 class="page-title">Security Settings</h2>
+        <div class="security-container">
+          <div class="settings-section">
+            <h3>Authentication</h3>
+            <div class="setting-item">
+              <label>Two-Factor Authentication</label>
+              <input type="checkbox" id="security-2fa">
+            </div>
+            <div class="setting-item">
+              <label>Session Timeout (minutes)</label>
+              <input type="number" id="security-session-timeout" value="60" min="5" max="1440">
+            </div>
+            <div class="setting-item">
+              <label>Max Login Attempts</label>
+              <input type="number" id="security-max-attempts" value="5" min="3" max="10">
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>IP Whitelist</h3>
+            <div class="ip-whitelist-controls">
+              <input type="text" id="ip-input" placeholder="Enter IP address (e.g., 192.168.1.1)">
+              <button class="btn-secondary" id="add-ip-btn">Add IP</button>
+            </div>
+            <div class="ip-list" id="ip-list"></div>
+          </div>
+
+          <div class="settings-section">
+            <h3>SSL/TLS</h3>
+            <div class="setting-item">
+              <label>Force HTTPS</label>
+              <input type="checkbox" id="security-force-https">
+            </div>
+            <div class="setting-item">
+              <label>HSTS Enabled</label>
+              <input type="checkbox" id="security-hsts">
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Firewall</h3>
+            <div class="setting-item">
+              <label>Enable Firewall</label>
+              <input type="checkbox" id="security-firewall" checked>
+            </div>
+            <div class="setting-item">
+              <label>Block Suspicious IPs</label>
+              <input type="checkbox" id="security-block-suspicious" checked>
+            </div>
+          </div>
+
+          <button class="btn-primary" id="save-security">Save Security Settings</button>
+        </div>
+      </div>
+
+      <div id="ports-tab" class="tab-content">
+        <h2 class="page-title">Port Management</h2>
+        <div class="ports-container">
+          <button class="btn-primary" id="add-port-btn" style="margin-bottom: 1.5rem;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Add Port Rule
+          </button>
+          
+          <div class="ports-list" id="ports-list">
+            <div class="loading">Loading ports...</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="site-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Create Site</h3>
+        <button class="modal-close" id="close-site-modal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="input-group">
+          <label>Site Name</label>
+          <input type="text" id="site-name" placeholder="my-website">
+        </div>
+        <div class="input-group">
+          <label>Site Type</label>
+          <select id="site-type">
+            <option value="static">Static HTML</option>
+            <option value="nodejs">Node.js</option>
+            <option value="vite">Vite</option>
+            <option value="react">React</option>
+            <option value="vue">Vue.js</option>
+            <option value="nextjs">Next.js</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Port</label>
+          <input type="number" id="site-port" placeholder="3000" min="1024" max="65535">
+        </div>
+        <div class="input-group">
+          <label>Domain (optional)</label>
+          <input type="text" id="site-domain" placeholder="example.com">
+        </div>
+        <button class="btn-primary" id="create-site-submit">Create Site</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="port-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Add Port Rule</h3>
+        <button class="modal-close" id="close-port-modal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="input-group">
+          <label>Port Number</label>
+          <input type="number" id="port-number" placeholder="8080" min="1" max="65535">
+        </div>
+        <div class="input-group">
+          <label>Protocol</label>
+          <select id="port-protocol">
+            <option value="tcp">TCP</option>
+            <option value="udp">UDP</option>
+            <option value="both">Both</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Action</label>
+          <select id="port-action">
+            <option value="allow">Allow</option>
+            <option value="deny">Deny</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Description</label>
+          <input type="text" id="port-description" placeholder="Web server">
+        </div>
+        <button class="btn-primary" id="add-port-submit">Add Rule</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="variable-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Create API Variable</h3>
+        <button class="modal-close" id="close-variable-modal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="input-group">
+          <label>Variable Name</label>
+          <input type="text" id="var-name" placeholder="e.g., APP_VERSION">
+        </div>
+        <div class="input-group">
+          <label>Value</label>
+          <textarea id="var-value" rows="4" placeholder="Variable value"></textarea>
+        </div>
+        <div class="input-group">
+          <label>Version</label>
+          <input type="text" id="var-version" placeholder="e.g., 1.0.0">
+        </div>
+        <div class="input-group">
+          <label>Password Protection (optional)</label>
+          <input type="password" id="var-password" placeholder="Leave empty for no password">
+        </div>
+        <div class="input-group">
+          <label>Redirect Delay (seconds)</label>
+          <input type="number" id="var-redirect-delay" value="5" min="0" max="60">
+          <small>Delay before redirecting from old version (0 = instant)</small>
+        </div>
+        <button class="btn-primary" id="create-variable-submit">Create Variable</button>
+        <div id="variable-result" class="variable-result hidden">
+          <h4>Variable Created!</h4>
+          <div class="result-info">
+            <label>API URL:</label>
+            <div class="url-container">
+              <input type="text" id="variable-url" readonly>
+              <button class="btn-copy" id="copy-variable-url">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="commit-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>New Commit</h3>
+        <button class="modal-close" id="close-commit-modal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="commit-var-id">
+        <div class="input-group">
+          <label>New Value</label>
+          <textarea id="commit-value" rows="4" placeholder="New variable value"></textarea>
+        </div>
+        <div class="input-group">
+          <label>New Version</label>
+          <input type="text" id="commit-version" placeholder="e.g., 1.1.0">
+        </div>
+        <button class="btn-primary" id="commit-submit">Commit Version</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="upload-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Upload File</h3>
+        <button class="modal-close" id="close-upload-modal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="dropzone-modal" id="dropzone-modal">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p>Drag & drop or click to select file</p>
+          <input type="file" id="file-input-modal" hidden>
+        </div>
+        <div class="upload-options-modal">
+          <div class="input-group">
+            <label>Password Protection (optional)</label>
+            <input type="password" id="upload-password-modal" placeholder="Leave empty for no password">
+          </div>
+          <button class="btn-primary" id="start-upload-btn" disabled>Upload File</button>
+        </div>
+        <div id="upload-progress" class="upload-progress hidden">
+          <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
+          <p id="progress-text">Uploading...</p>
+        </div>
+        <div id="upload-result-modal" class="upload-result-modal hidden">
+          <h4>Upload Successful!</h4>
+          <div class="result-info">
+            <label>Download URL:</label>
+            <div class="url-container">
+              <input type="text" id="download-url-modal" readonly>
+              <button class="btn-copy" id="copy-url-modal">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
